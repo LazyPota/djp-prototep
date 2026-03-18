@@ -43,3 +43,44 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Android tools
+android/app/build/
+android/.gradle
+android/build/
+android/local.properties
+*.jks
+*.keystore
+
+# iOS tools
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.podspec
+ios/Flutter/Generated.xcconfig
+ios/Flutter/app.flx
+ios/Flutter/app.zip
+ios/Flutter/flutter_assets/
+ios/Flutter/flutter_export_environment.sh
+
+# Macos tools
+macos/Flutter/GeneratedPluginRegistrant.swift
+macos/Flutter/ephemeral/
+macos/Pods/
+
+# Windows tools
+windows/flutter/ephemeral/
+windows/flutter/generated_plugin_registrant.cc
+
+# Linux tools
+linux/flutter/ephemeral/
+linux/flutter/generated_plugin_registrant.cc
+
+# Web tools
+web/flutter_bootstrap.js
+
+# Env variables
+.env
+.env.*
+
+# Keystores
+key.properties
