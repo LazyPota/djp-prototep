@@ -49,7 +49,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final trustScoreNotifierState = ref.watch(trustScoreNotifierProvider);
+    final trustScoreNotifierState = ref.watch(trustScoreProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -74,7 +74,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                 onPressed: () {
                   final url = _urlController.text.trim();
                   if (url.isNotEmpty) {
-                    ref.read(trustScoreNotifierProvider.notifier).analyzeUrl(url);
+                    ref.read(trustScoreProvider.notifier).analyzeUrl(url);
                   }
                 },
                 child: const Text('Analyze URL'),

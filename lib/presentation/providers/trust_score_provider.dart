@@ -1,4 +1,5 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:async';
+
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../domain/entities/trust_score.dart';
 import '../../domain/repositories/trust_score_repository.dart';

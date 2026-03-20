@@ -60,7 +60,12 @@ class SharedIntentService {
   }
 
   void _triggerAnalysis(String url) {
-    ref.read(trustScoreNotifierProvider.notifier).analyzeUrl(url);
+    final uri = Uri.tryParse(url);
+    if (uri == null || !uri.isAbsolute || (uri.scheme != 'http' && uri.scheme != 'https')) {
+      debugPrint("SharedIntentService: ignored non-URL value: $url");
+      return;
+    }
+    ref.read(trustScoreProvider.notifier).analyzeUrl(url);
   }
 
   void dispose() {

@@ -24,14 +24,17 @@ tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }
 
-// Menyelaraskan Kotlin ke 1.8 khusus untuk package pihak ketiga 
-// agar cocok dengan Java bawaan mereka yang terkunci di 1.8
+// Kotlin/Java targets must match per-module (Kotlin validation is strict).
+// Most Flutter/AGP modules are on Java 17, but some older plugins are still on 1.8.
 subprojects {
-    if (project.name != "app") {
-        tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-            compilerOptions {
-                jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8)
-            }
+    val kotlinTarget = when (project.name) {
+        "receive_sharing_intent" -> org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8
+        else -> org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
+
+    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+        compilerOptions {
+            jvmTarget.set(kotlinTarget)
         }
     }
 }

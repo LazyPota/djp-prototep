@@ -6,9 +6,9 @@ Future<void> updateOverlayData(Map data) async {
     await FlutterOverlayWindow.shareData(data);
   } else {
     await FlutterOverlayWindow.showOverlay(
-      enableDrag: true,
-      overlayTitle: "Fraud Detector",
-      overlayContent: "Running in background",
+      enableDrag: false,
+      overlayTitle: "Awas!",
+      overlayContent: "Tap to check product",
       flag: OverlayFlag.defaultFlag,
       visibility: NotificationVisibility.visibilityPublic,
       positionGravity: PositionGravity.auto,
