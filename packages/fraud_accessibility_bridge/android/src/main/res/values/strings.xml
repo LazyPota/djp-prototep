@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="fraud_accessibility_service_description">Detects product pages and taps Share → Copy Link to analyze fraud risk.</string>
+</resources>

@@ -1,6 +1,15 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+
+import 'package:fraud_accessibility_bridge/fraud_accessibility_bridge.dart';
+
+import '../../core/services/fraud_api_service.dart';
+import '../../core/services/protection_prefs.dart';
+import '../../core/utils/supported_apps.dart';
+import '../../domain/entities/trust_score.dart';
+import '../../l10n/l10n_extensions.dart';
 import 'trust_gauge.dart';
 
 class OverlayWidget extends StatefulWidget {
@@ -11,9 +20,17 @@ class OverlayWidget extends StatefulWidget {
 }
 
 class _OverlayWidgetState extends State<OverlayWidget> {
+  final _bridge = const FraudAccessibilityBridge();
+  final _api = const FraudApiService();
+  final _prefs = ProtectionPrefs();
+
   bool _isExpanded = false;
-  int _score = 0;
-  String _riskLevel = 'Analyzing...';
+  bool _isBusy = false;
+  Offset _modalOffset = Offset.zero;
+
+  String _status = '';
+  String? _copiedUrl;
+  TrustScore? _result;
   StreamSubscription? _subscription;
 
   @override
@@ -22,13 +39,17 @@ class _OverlayWidgetState extends State<OverlayWidget> {
     _subscription = FlutterOverlayWindow.overlayListener.listen((event) {
       if (event is Map) {
         setState(() {
-          _score = event['score'] ?? 0;
-          _riskLevel = event['riskLevel'] ?? 'Unknown';
-          // When data comes in, expand the bubble
-          _isExpanded = true;
+          if (event['type'] == 'ready') {
+            _status = context.l10n.tapToCheck;
+          }
         });
-        _resizeForExpanded();
       }
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _status = context.l10n.tapToCheck;
+      });
     });
   }
 
@@ -38,30 +59,119 @@ class _OverlayWidgetState extends State<OverlayWidget> {
     super.dispose();
   }
 
-void _resizeForExpanded() async {
-    // Resize window to act like a bottom sheet or centered partial view
+  Future<void> _resizeForExpanded() async {
     await FlutterOverlayWindow.resizeOverlay(
       WindowSize.matchParent,
       WindowSize.matchParent,
-      true, // ADD THIS: enable animation for resizing
+      true,
     );
   }
 
-  void _resizeForCollapsed() async {
+  Future<void> _resizeForCollapsed() async {
     await FlutterOverlayWindow.resizeOverlay(
-      150,
-      150,
-      true, // ADD THIS: enable animation for resizing
+      40,
+      64,
+      true,
     );
+  }
+
+  Future<void> _runCheck() async {
+    if (_isBusy) return;
+
+    setState(() {
+      _isBusy = true;
+      _result = null;
+      _copiedUrl = null;
+      _status = context.l10n.checkingCurrentScreen;
+    });
+
+    try {
+      final pkg = await _bridge.getCurrentForegroundApp();
+      final isSupported = pkg != null && supportedShoppingApps.contains(pkg);
+      if (!isSupported) {
+        setState(() {
+          _status = context.l10n.scanSupportedOnly;
+        });
+        return;
+      }
+
+      final copyResult = await _bridge.checkAndCopyProductLink();
+      final status = (copyResult['status'] ?? '').toString();
+
+      if (status == 'not_product') {
+        setState(() {
+          _status = (copyResult['message'] ?? 'Not on a product page.').toString();
+        });
+        return;
+      }
+
+      if (status != 'success') {
+        setState(() {
+          _status = (copyResult['message'] ?? 'Could not copy a product link.').toString();
+        });
+        return;
+      }
+
+      final copied = (copyResult['copiedText'] ?? '').toString();
+      if (copied.isEmpty) {
+        setState(() {
+          _status = 'Clipboard copy succeeded, but no link was found.';
+        });
+        return;
+      }
+
+      setState(() {
+        _copiedUrl = copied;
+        _status = context.l10n.sendingLink;
+      });
+
+      final result = await _api.analyzeUrl(copied);
+      await _prefs.incrementProtectedCount();
+
+      setState(() {
+        _result = result;
+        _status = context.l10n.done;
+      });
+    } catch (e) {
+      setState(() {
+        _status = 'Error: $e';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isBusy = false;
+        });
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: Center(
-        child: _isExpanded ? _buildExpandedView() : _buildCollapsedView(),
-      ),
+      body: _isExpanded
+          ? Stack(
+              children: [
+                const Positioned.fill(child: SizedBox.shrink()),
+                Center(
+                  child: GestureDetector(
+                    onPanUpdate: (details) {
+                      setState(() {
+                        _modalOffset += details.delta;
+                      });
+                    },
+                    child: Transform.translate(
+                      offset: _modalOffset,
+                      child: _buildExpandedView(),
+                    ),
+                  ),
+                ),
+              ],
+            )
+          : Align(
+              alignment: Alignment.centerRight,
+              child: _buildCollapsedView(),
+            ),
     );
   }
 
@@ -70,27 +180,39 @@ void _resizeForExpanded() async {
       onTap: () {
         setState(() {
           _isExpanded = true;
+          _modalOffset = Offset.zero;
         });
         _resizeForExpanded();
+        _runCheck();
       },
-      child: Container(
-        width: 64,
+      child: SizedBox(
+        width: 40,
         height: 64,
-        decoration: BoxDecoration(
-          color: Colors.blue.shade700,
-          shape: BoxShape.circle,
-          boxShadow: const [
-            BoxShadow(
-              color: Colors.black45,
-              blurRadius: 8,
-              offset: Offset(0, 4),
+        child: ClipRect(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            widthFactor: 0.62,
+            child: Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: Colors.cyan.shade600,
+                shape: BoxShape.circle,
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.black45,
+                    blurRadius: 8,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.verified_user,
+                color: Colors.white,
+                size: 26,
+              ),
             ),
-          ],
-        ),
-        child: const Icon(
-          Icons.security,
-          color: Colors.white,
-          size: 32,
+          ),
         ),
       ),
     );
@@ -98,10 +220,11 @@ void _resizeForExpanded() async {
 
   Widget _buildExpandedView() {
     return Container(
-      width: MediaQuery.of(context).size.width * 0.9, // 90% of screen width
+      width: MediaQuery.of(context).size.width * 0.9,
+      constraints: const BoxConstraints(maxWidth: 420),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(24),
         boxShadow: const [
           BoxShadow(
@@ -117,15 +240,22 @@ void _resizeForExpanded() async {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Fraud Risk Analysis',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+              const Expanded(
+                child: Text(
+                  'Awas!',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ),
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
+                  IconButton(
+                    icon: const Icon(Icons.refresh),
+                    tooltip: 'Check again',
+                    onPressed: _isBusy ? null : _runCheck,
+                  ),
                   IconButton(
                     icon: const Icon(Icons.close_fullscreen),
                     tooltip: 'Collapse',
@@ -147,8 +277,42 @@ void _resizeForExpanded() async {
               ),
             ],
           ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              _status,
+              style: TextStyle(
+                color: _status.startsWith('Error') ? Colors.red : Theme.of(context).colorScheme.onSurface,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          if (_copiedUrl != null) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                _copiedUrl!,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
-          TrustGauge(score: _score, riskLevel: _riskLevel),
+          if (_isBusy) const LinearProgressIndicator(minHeight: 3),
+          if (_result != null) ...[
+            const SizedBox(height: 16),
+            TrustGauge(score: _result!.friScore, riskLevel: _result!.riskLevel),
+          ],
+          if (!_isBusy && _result == null) ...[
+            const SizedBox(height: 8),
+            Text(
+              context.l10n.openProductThenRefresh,
+              style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+          ],
         ],
       ),
     );

@@ -47,6 +47,7 @@ app.*.map.json
 # Android tools
 android/app/build/
 android/.gradle
+android/.kotlin
 android/build/
 android/local.properties
 *.jks

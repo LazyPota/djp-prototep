@@ -60,7 +60,7 @@ class SharedIntentService {
   }
 
   void _triggerAnalysis(String url) {
-    ref.read(trustScoreNotifierProvider.notifier).analyzeUrl(url);
+    ref.read(trustScoreProvider.notifier).analyzeUrl(url);
   }
 
   void dispose() {
